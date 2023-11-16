@@ -242,7 +242,7 @@ export function detectLocale<Context extends NuxtApp = NuxtApp>(
 
   if (!finalLocale) {
     if (differentDomains) {
-      finalLocale = getLocaleDomain(normalizedLocales)
+      finalLocale = getLocaleDomain(normalizedLocales, strategy, route)
     } else if (strategy !== 'no_prefix') {
       finalLocale = routeLocaleGetter(route)
     } else {

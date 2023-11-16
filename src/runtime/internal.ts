@@ -433,10 +433,17 @@ export function getHost() {
   return host
 }
 
-export function getLocaleDomain(locales: LocaleObject[]): string {
+export function getLocaleDomain(
+  locales: LocaleObject[],
+  strategy: string,
+  route: string | Route | RouteLocationNormalized | RouteLocationNormalizedLoaded
+): string {
   let host = getHost() || ''
   if (host) {
-    const matchingLocale = locales.find(locale => {
+    __DEBUG__ &&
+      console.log(`MixedDomains: locating domain for host: `, host, strategy, isObject(route) ? route.path : route)
+    let matchingLocale: LocaleObject | undefined
+    const matchingLocales = locales.filter(locale => {
       if (locale && locale.domain) {
         let domain = locale.domain
         if (hasProtocol(locale.domain)) {
@@ -446,6 +453,48 @@ export function getLocaleDomain(locales: LocaleObject[]): string {
       }
       return false
     })
+
+    if (matchingLocales.length === 1) {
+      matchingLocale = matchingLocales[0]
+      __DEBUG__ && console.log(`MixedDomains: found only one matching domain: `, host, matchingLocales[0].code)
+    } else if (matchingLocales.length > 1) {
+      if (strategy === 'no_prefix') {
+        console.warn(
+          formatMessage(
+            'Multiple matching domains found! This is not supported for no_prefix strategy in combination with differentDomains!'
+          )
+        )
+        // Just return the first matching domain locale
+        matchingLocale = matchingLocales[0]
+      } else {
+        // get prefix from route
+        if (route) {
+          const routePath = isObject(route) ? route.path : isString(route) ? route : ''
+
+          __DEBUG__ && console.log(`MixedDomains: Check in matched domain for locale match in path: `, routePath, host)
+
+          if (routePath && routePath !== '') {
+            const matches = routePath.match(getLocalesRegex(matchingLocales.map(l => l.code)))
+            if (matches && matches.length > 1) {
+              matchingLocale = matchingLocales.find(l => l.code === matches[1])
+              __DEBUG__ &&
+                console.log(`MixedDomains: Found matching locale from path. MatchingLocale is now`, matchingLocale)
+            }
+          }
+        }
+
+        if (!matchingLocale) {
+          // Fall back to default language on this domain - if set
+          matchingLocale = matchingLocales.find(l => l.domainDefault)
+          __DEBUG__ &&
+            console.log(
+              `MixedDomains: matching locale not found - trying to get default for this domain. MatchingLocale is now`,
+              matchingLocale
+            )
+        }
+      }
+    }
+
     if (matchingLocale) {
       return matchingLocale.code
     } else {

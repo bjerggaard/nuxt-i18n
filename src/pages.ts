@@ -1,7 +1,7 @@
 import createDebug from 'debug'
 import { extendPages } from '@nuxt/kit'
 import { localizeRoutes, DefaultLocalizeRoutesPrefixable } from 'vue-i18n-routing'
-import { isString } from '@intlify/shared'
+import { isString, isObject } from '@intlify/shared'
 import { parse as parseSFC, compileScript } from '@vue/compiler-sfc'
 import { walk } from 'estree-walker'
 import MagicString from 'magic-string'
@@ -43,8 +43,20 @@ export function setupPages(
 ) {
   // override prefixable path for localized target routes
   function localizeRoutesPrefixable(opts: LocalizeRoutesPrefixableOptions): boolean {
-    // no prefix if app uses different locale domains
-    return !options.differentDomains && DefaultLocalizeRoutesPrefixable(opts)
+    // Special care for differentDomains in combination with 'prefix_except_default' strategy
+    const { currentLocale, defaultLocale, strategy, isChild, path } = opts
+    if (options.differentDomains && strategy === 'prefix_except_default') {
+      const domainDefaults = options.locales
+        .filter(locale => (isObject(locale) ? locale.domainDefault : false))
+        .map(locale => (isObject(locale) ? locale.code : ''))
+      const isDefaultLocale = currentLocale === defaultLocale || domainDefaults.includes(currentLocale)
+      const isChildWithRelativePath = isChild && !path.startsWith('/')
+
+      // no need to add prefix if child's path is relative
+      return !isChildWithRelativePath && !isDefaultLocale
+    }
+
+    return DefaultLocalizeRoutesPrefixable(opts)
   }
 
   let includeUprefixedFallback = nuxt.options.ssr === false
